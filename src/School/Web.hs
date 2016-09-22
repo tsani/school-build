@@ -1,13 +1,18 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
 module School.Web where
 
+import School.Repo
+
+import Control.Monad ( forM )
 import Control.Monad.IO.Class ( liftIO )
-import Data.Aeson ( Object )
+import Data.Aeson ( Object, FromJSON, ToJSON, encode, decode )
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
+import Data.Maybe ( fromJust )
 import Network.Wai ( Application )
 import Network.Wai.Handler.Warp ( run )
 import Servant
@@ -25,7 +30,7 @@ import System.Directory
 -- webservice.
 newtype RepoBuildAction
   = RepoBuildAction
-    { unRepoBuildAction :: IO ()
+    { unRepoBuildAction :: Repo -> IO ()
     }
 
 -- | Computes the path to the config directory, creating the directory if it
@@ -37,37 +42,63 @@ makeConfigPath = do
   pure p
 
 -- | Gets the path to the secret key associated with the school repo.
-getKeyPath :: IO FilePath
-getKeyPath = (</> "key.bin") <$> makeConfigPath
+getKeyPath :: Repo -> IO FilePath
+getKeyPath r = (</> repoName r ++ "-key.bin") <$> makeConfigPath
+
+loadGitHubKey :: IO MyGitHubKey
+loadGitHubKey = do
+  confDir <- makeConfigPath
+  assoc <- forM repos $ \repo -> (,) <$> pure repo
+    <*> BS.readFile (confDir </> keyFileName repo)
+  pure $ GitHubKey (pure . fromJust . flip lookup assoc)
 
 -- | Start the webservice.
 webMain :: RepoBuildAction -> IO ()
 webMain build = do
-  [key] <- map (gitHubKey . pure) . C8.lines <$> (BS.readFile =<< getKeyPath)
+  key <- loadGitHubKey
   run 8081 (app build key)
 
-app :: RepoBuildAction -> GitHubKey -> Application
+app :: RepoBuildAction -> MyGitHubKey -> Application
 app build key = serveWithContext api (key :. EmptyContext) (server build)
 
 api :: Proxy SchoolApi
 api = Proxy
 
+type MyGitHubKey = GitHubKey' Repo
+
 type SchoolApi
   = "github" :> (
+    "school" :> (
       GitHubEvent '[ 'WebhookPushEvent ]
-    :> GitHubSignedReqBody '[JSON] Object
-    :> PostAccepted '[JSON] ()
-  :<|>
+      :> GitHubSignedReqBody' 'SchoolRepo '[JSON] Object
+      :> PostAccepted '[JSON] ()
+    :<|>
       GitHubEvent '[ 'WebhookWildcardEvent ]
-    :> GitHubSignedReqBody '[JSON] Object
-    :> Post '[JSON] ()
+      :> GitHubSignedReqBody' 'SchoolRepo '[JSON] Object
+      :> Post '[JSON] ()
+    )
+  :<|>
+    "cv" :> (
+      GitHubEvent '[ 'WebhookPushEvent ]
+      :> GitHubSignedReqBody' 'CvRepo '[JSON] Object
+      :> PostAccepted '[JSON] ()
+    :<|>
+      GitHubEvent '[ 'WebhookWildcardEvent ]
+      :> GitHubSignedReqBody' 'CvRepo '[JSON] Object
+      :> Post '[JSON] ()
+    )
   )
 
 server :: RepoBuildAction -> Server SchoolApi
-server build
-  = buildHandler build
-  :<|> const (const (liftIO $ putStrLn "Got some other event."))
+server build = schoolRepo :<|> cvRepo where
+  schoolRepo = buildHandler build :<|> trivial
+  cvRepo = buildHandler build :<|> trivial
+  trivial = const (const (liftIO $ putStrLn "Got some other event."))
 
-buildHandler :: RepoBuildAction -> RepoWebhookEvent -> Object -> Handler ()
-buildHandler build _ _ = beginBuild where
-  beginBuild = liftIO (unRepoBuildAction build)
+buildHandler
+  :: RepoBuildAction
+  -> RepoWebhookEvent
+  -> (Repo, Object)
+  -> Handler ()
+buildHandler build _ (repo, _) = beginBuild where
+  beginBuild = liftIO (unRepoBuildAction build repo)

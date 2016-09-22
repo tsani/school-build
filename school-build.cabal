@@ -31,6 +31,6 @@ executable school-build
     process >=1.4 && <1.5,
     servant >=0.8 && <0.9,
     servant-server >=0.8 && <0.9,
-    servant-github-webhook >=0.2 && <0.3,
+    servant-github-webhook >=0.3 && <0.4,
     wai >=3.2 && <3.3,
     warp >=3.2 && <3.3
