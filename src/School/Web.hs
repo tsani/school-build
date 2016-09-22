@@ -49,7 +49,7 @@ loadGitHubKey :: IO MyGitHubKey
 loadGitHubKey = do
   confDir <- makeConfigPath
   assoc <- forM repos $ \repo -> (,) <$> pure repo
-    <*> BS.readFile (confDir </> keyFileName repo)
+    <*> (head . C8.lines <$> BS.readFile (confDir </> keyFileName repo))
   pure $ GitHubKey (pure . fromJust . flip lookup assoc)
 
 -- | Start the webservice.

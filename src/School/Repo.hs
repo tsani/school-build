@@ -16,7 +16,7 @@ data RepoSettings
 data Repo
   = SchoolRepo
   | CvRepo
-  deriving (Bounded, Enum, Eq)
+  deriving (Bounded, Enum, Eq, Show)
 
 repos :: [Repo]
 repos = [minBound .. maxBound]
