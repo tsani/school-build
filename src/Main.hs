@@ -19,21 +19,29 @@ main :: IO ()
 main = do
   cdHome
   putStrLn =<< getCurrentDirectory
+  chan <- startBuilder
+  webMain $ RepoBuildAction (writeChan chan)
+
+startBuilder :: IO (Chan Repo)
+startBuilder = do
   chan <- newChan
-  let strategy = RepoBuildAction $ \repo -> writeChan chan repo
-  void . forkIO . forever $ do
-    repo <- readChan chan
-    withCurrentDirectory (repoRoot (repoSettings repo)) $ do
-      (status, log) <- runUpdateRepo (updateRepo *> runMakefile)
-      case status of
-        Left e -> case e of
-          FailedToFetch msg -> showE "Failed to fetch remote:" msg
-          FailedToReset msg -> showE "Failed to reset repo: " msg
-          FailedToMake msg -> showE "Failed to build repo: " msg
-        Right _ -> do
-          putStrLn "Build successful!"
-          mapM_ putStr log
-  webMain strategy
+  void . forkIO $ builder chan
+  pure chan
+
+builder :: Chan Repo -> IO ()
+builder chan = forever $ do
+  repo <- readChan chan
+  withCurrentDirectory (repoRoot (repoSettings repo)) $ do
+    (status, log) <- runUpdateRepo (updateRepo *> runMakefile)
+    case status of
+      Left e -> case e of
+        FailedToFetch msg -> showE "Failed to fetch remote:" msg
+        FailedToReset msg -> showE "Failed to reset repo: " msg
+        FailedToMake msg -> showE "Failed to build repo: " msg
+      Right _ -> do
+        putStrLn "Build successful!"
+        mapM_ putStr log
+
 
 showE :: String -> String -> IO ()
 showE s e = do
