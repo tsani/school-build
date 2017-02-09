@@ -77,9 +77,13 @@ checkManualAuth key = AuthHandler $ \r -> do
       | Right givenKey <- givenKeyE -> do
         if givenKey == key
           then liftIO $ putStrLn "passed auth"
-          else throwError err404
-      | otherwise -> throwError err404
-    Nothing -> throwError err404
+          else liftIO (putStrLn "auth failed") *> throwError err404
+      | otherwise -> do
+        liftIO $ putStrLn "auth decode failed"
+        throwError err404
+    Nothing -> do
+      liftIO $ putStrLn "no auth header"
+      throwError err404
 
 api :: Proxy SchoolApi
 api = Proxy
