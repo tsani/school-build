@@ -35,8 +35,12 @@ main = do
   cdHome
   putStrLn =<< getCurrentDirectory
   (key, deviceId) <- loadPushbulletSettings
+  schoolKey <- loadSchoolApiKey
   chan <- startBuilder key deviceId
-  webMain $ RepoBuildAction (writeChan chan)
+  webMain schoolKey $ RepoBuildAction (writeChan chan)
+
+loadSchoolApiKey :: IO SchoolApiKey
+loadSchoolApiKey = getEnvText "SCHOOL_BUILD_KEY" <|> die "no SCHOOL_BUILD_KEY"
 
 loadPushbulletSettings :: IO (PushbulletKey, DeviceId)
 loadPushbulletSettings = pure (,)
@@ -74,6 +78,8 @@ builder key device chan = do
   let url = BaseUrl Https "api.pushbullet.com" 443 ""
   let env = ClientEnv manager url
   let runHttp = flip runClientM env
+
+  putStrLn "async repo builder started"
 
   forever $ do
     repo <- readChan chan
