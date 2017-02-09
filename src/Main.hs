@@ -15,6 +15,7 @@ import Control.Concurrent ( forkIO )
 import Control.Concurrent.Chan
 import Control.Monad ( forever, mapM_, void )
 import qualified Data.ByteString as BS
+import Data.Monoid ( (<>) )
 import qualified Data.Text as T
 import Data.Text.Encoding ( decodeUtf8 )
 import Network.HTTP.Client ( newManager )
@@ -97,8 +98,8 @@ builder key device chan = do
               simpleNewPush
                 ToAll
                 NotePush
-                  { pushTitle = title
-                  , pushBody = T.pack msg
+                  { pushTitle = "Build completed"
+                  , pushBody = "Failed (" <> title <> ")\n" <> T.pack msg
                   }
         Right _ -> do
           putStrLn "Build successful!"
@@ -108,8 +109,8 @@ builder key device chan = do
               simpleNewPush
                 ToAll
                 NotePush
-                  { pushTitle = "Build successful!"
-                  , pushBody = "lmao"
+                  { pushTitle = "Build completed"
+                  , pushBody = "Build successfully completed."
                   }
 
       pure ()
