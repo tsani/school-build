@@ -19,6 +19,6 @@ if test -z "$REPO" ; then
     exit 1
 fi
 
-curl -v -X POST \
+curl -X POST \
     -H "Authorization: $SCHOOL_BUILD_KEY" \
     "$SCHOOL_BASE_URL/manual/$1"
