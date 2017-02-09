@@ -37,7 +37,7 @@ instance Monoid m => Alternative (Check m) where
 
 instance FromHttpApiData Repo where
   parseUrlPiece p
-    = check $ match CvRepo "not cv " <|> match SchoolRepo "not school " where
+    = check $ match CvRepo "cv" <|> match SchoolRepo "school" where
       match t s = if s == p then pure t else Check (Left ("not " <> s))
 
 repos :: [Repo]
