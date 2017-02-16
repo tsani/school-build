@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -94,26 +95,12 @@ type MyGitHubKey = GitHubKey' Repo
 type SchoolApi
   =
     "github" :> (
-      "school" :> (
-        GitHubEvent '[ 'WebhookPushEvent ]
-        :> GitHubSignedReqBody' 'SchoolRepo '[JSON] Object
-        :> PostAccepted '[JSON] ()
-      :<|>
-        GitHubEvent '[ 'WebhookWildcardEvent ]
-        :> GitHubSignedReqBody' 'SchoolRepo '[JSON] Object
-        :> Post '[JSON] ()
-      )
+      "school" :> Handle 'SchoolRepo
     :<|>
-      "cv" :> (
-        GitHubEvent '[ 'WebhookPushEvent ]
-        :> GitHubSignedReqBody' 'CvRepo '[JSON] Object
-        :> PostAccepted '[JSON] ()
-      :<|>
-        GitHubEvent '[ 'WebhookWildcardEvent ]
-        :> GitHubSignedReqBody' 'CvRepo '[JSON] Object
-        :> Post '[JSON] ()
-      )
-    )
+      "cv" :> Handle 'CvRepo
+    :<|>
+      "blog" :> Handle 'BlogRepo
+  )
   :<|>
     "manual" :> (
       AuthProtect SchoolApiAuth
@@ -121,13 +108,21 @@ type SchoolApi
         :> PostAccepted '[JSON] ()
     )
 
+type Handle key
+  = GitHubEvent '[ 'WebhookPushEvent ]
+    :> GitHubSignedReqBody' key '[JSON] Object
+    :> PostAccepted '[JSON] ()
+  :<|>
+    GitHubEvent '[ 'WebhookWildcardEvent ]
+    :> GitHubSignedReqBody' key '[JSON] Object
+    :> Post '[JSON] ()
+
 data SchoolApiAuth
 type instance AuthServerData (AuthProtect SchoolApiAuth) = ()
 
 server :: RepoBuildAction -> Server SchoolApi
-server build = (schoolRepo :<|> cvRepo) :<|> manual where
-  schoolRepo = buildHandler build :<|> trivial
-  cvRepo = buildHandler build :<|> trivial
+server build = (ugh :<|> ugh :<|> ugh) :<|> manual where
+  ugh = buildHandler build :<|> trivial
   trivial = const (const (liftIO $ putStrLn "Got some other event."))
   manual () repo
     = buildHandler

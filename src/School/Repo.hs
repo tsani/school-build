@@ -8,6 +8,7 @@ module School.Repo where
 
 import Control.Applicative ( Alternative(..) )
 import Data.Monoid ( mempty,(<>) )
+import Data.String ( IsString )
 import Servant.GitHub.Webhook
 import Web.HttpApiData ( FromHttpApiData(..) )
 
@@ -21,6 +22,7 @@ data RepoSettings
 data Repo
   = SchoolRepo
   | CvRepo
+  | BlogRepo
   deriving (Bounded, Enum, Eq, Show)
 
 -- | The check monad has a goofy alternative instance, in which runs of 'Left'
@@ -37,16 +39,22 @@ instance Monoid m => Alternative (Check m) where
 
 instance FromHttpApiData Repo where
   parseUrlPiece p
-    = check $ match CvRepo "cv" <|> match SchoolRepo "school" where
+    = check matches where
+      matchRepo repo = match repo (repoName repo)
+      matches
+        = matchRepo CvRepo
+        <|> matchRepo SchoolRepo
+        <|> matchRepo BlogRepo
       match t s = if s == p then pure t else Check (Left ("not " <> s))
 
 repos :: [Repo]
 repos = [minBound .. maxBound]
 
-repoName :: Repo -> String
+repoName :: IsString a => Repo -> a
 repoName = \case
   SchoolRepo -> "school"
   CvRepo -> "cv"
+  BlogRepo -> "blog"
 
 keyFileName :: Repo -> FilePath
 keyFileName = (++ "-key.bin") . repoName
@@ -55,9 +63,12 @@ repoSettings :: Repo -> RepoSettings
 repoSettings = \case
   SchoolRepo -> RepoSettings { repoRoot = "school" }
   CvRepo -> RepoSettings { repoRoot = "projects" </> "cv" }
+  BlogRepo -> RepoSettings { repoRoot = "projects" </> "jerrington.me" }
 
 type instance Demote' ('KProxy :: KProxy Repo) = Repo
 instance Reflect 'SchoolRepo where
   reflect _ = SchoolRepo
 instance Reflect 'CvRepo where
   reflect _ = CvRepo
+instance Reflect 'BlogRepo where
+  reflect _ = BlogRepo
