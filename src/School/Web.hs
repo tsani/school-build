@@ -37,7 +37,7 @@ import System.Directory
 -- webservice.
 newtype RepoBuildAction
   = RepoBuildAction
-    { unRepoBuildAction :: Repo -> IO ()
+    { unRepoBuildAction :: IO ()
     }
 
 -- | Computes the path to the config directory, creating the directory if it
@@ -48,25 +48,13 @@ makeConfigPath = do
   createDirectoryIfMissing True p
   pure p
 
--- | Gets the path to the secret key associated with the school repo.
-getKeyPath :: Repo -> IO FilePath
-getKeyPath r = (</> repoName r ++ "-key.bin") <$> makeConfigPath
-
-loadGitHubKey :: IO MyGitHubKey
-loadGitHubKey = do
-  confDir <- makeConfigPath
-  assoc <- forM repos $ \repo -> (,) <$> pure repo
-    <*> (head . C8.lines <$> BS.readFile (confDir </> keyFileName repo))
-  pure $ GitHubKey (pure . fromJust . flip lookup assoc)
-
 -- | Start the webservice.
-webMain :: SchoolApiKey -> RepoBuildAction -> IO ()
-webMain manualKey build = do
-  key <- loadGitHubKey
+webMain :: RepoKey -> SchoolApiKey -> RepoBuildAction -> IO ()
+webMain (RepoKey key) manualKey build = do
   putStrLn "listening on port 8081"
-  run 8081 (app manualKey build key)
+  run 8081 (app manualKey build (gitHubKey (pure key)))
 
-app :: SchoolApiKey -> RepoBuildAction -> MyGitHubKey -> Application
+app :: SchoolApiKey -> RepoBuildAction -> GitHubKey -> Application
 app manualKey build ghKey = serveWithContext api ctx (server build) where
   ctx = checkManualAuth manualKey :. ghKey :. EmptyContext
 
@@ -90,21 +78,13 @@ api :: Proxy SchoolApi
 api = Proxy
 
 type SchoolApiKey = Text
-type MyGitHubKey = GitHubKey' Repo
 
 type SchoolApi
   =
-    "github" :> (
-      "school" :> Handle 'SchoolRepo
-    :<|>
-      "cv" :> Handle 'CvRepo
-    :<|>
-      "blog" :> Handle 'BlogRepo
-  )
+    "github" :> Handle '()
   :<|>
     "manual" :> (
       AuthProtect SchoolApiAuth
-        :> Capture "repo" Repo
         :> PostAccepted '[JSON] ()
     )
 
@@ -121,19 +101,9 @@ data SchoolApiAuth
 type instance AuthServerData (AuthProtect SchoolApiAuth) = ()
 
 server :: RepoBuildAction -> Server SchoolApi
-server build = (ugh :<|> ugh :<|> ugh) :<|> manual where
-  ugh = buildHandler build :<|> trivial
-  trivial = const (const (liftIO $ putStrLn "Got some other event."))
-  manual () repo
-    = buildHandler
-      build
-      (error "accessed webhookevent for manual build")
-      (repo, error "accessed request body (doesn't exist) for manual build")
+server build = (automatic :<|> trivial) :<|> manual where
+  manual _ = work
+  automatic _ _ = work
+  work = liftIO (unRepoBuildAction build)
 
-buildHandler
-  :: RepoBuildAction
-  -> RepoWebhookEvent
-  -> (Repo, Object)
-  -> Handler ()
-buildHandler build _ (repo, _) = beginBuild where
-  beginBuild = liftIO (unRepoBuildAction build repo)
+  trivial = const (const (liftIO $ putStrLn "Got some other event."))

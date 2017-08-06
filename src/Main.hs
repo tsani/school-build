@@ -17,7 +17,7 @@ import Control.Monad ( forever, mapM_, void )
 import qualified Data.ByteString as BS
 import Data.Monoid ( (<>) )
 import qualified Data.Text as T
-import Data.Text.Encoding ( decodeUtf8 )
+import Data.Text.Encoding ( decodeUtf8, encodeUtf8 )
 import Network.HTTP.Client ( newManager )
 import Network.HTTP.Client.TLS ( tlsManagerSettings )
 import Servant.Client
@@ -37,11 +37,22 @@ main = do
   putStrLn =<< getCurrentDirectory
   (key, deviceId) <- loadPushbulletSettings
   schoolKey <- loadSchoolApiKey
+  repoKey <- loadRepoKey
+  repoRoot <- Repo <$> loadRepoRoot
   chan <- startBuilder key deviceId
-  webMain schoolKey $ RepoBuildAction (writeChan chan)
+  webMain repoKey schoolKey $ RepoBuildAction (writeChan chan repoRoot)
 
 loadSchoolApiKey :: IO SchoolApiKey
 loadSchoolApiKey = getEnvText "SCHOOL_BUILD_KEY" <|> die "no SCHOOL_BUILD_KEY"
+
+loadRepoRoot :: IO FilePath
+loadRepoRoot
+  = getEnv "SCHOOL_BUILD_REPO_ROOT" <|> die "no SCHOOL_BUILD_REPO_ROOT"
+
+loadRepoKey :: IO RepoKey
+loadRepoKey =
+  RepoKey . encodeUtf8 <$> getEnvText "SCHOOL_BUILD_REPO_KEY"
+  <|> die "no SCHOOL_BUILD_REPO_KEY"
 
 loadPushbulletSettings :: IO (PushbulletKey, DeviceId)
 loadPushbulletSettings = pure (,)
@@ -83,8 +94,8 @@ builder key device chan = do
   putStrLn "async repo builder started"
 
   forever $ do
-    repo <- readChan chan
-    withCurrentDirectory (repoRoot (repoSettings repo)) $ do
+    (Repo root) <- readChan chan
+    withCurrentDirectory root $ do
       (status, log) <- runUpdateRepo (updateRepo *> runMakefile)
       _ <- case status of
         Left e -> do
