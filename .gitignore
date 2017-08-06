@@ -4,3 +4,4 @@
 /cabal.sandbox.config
 /enter.sh/
 /.secrets
+/.stack-work/
