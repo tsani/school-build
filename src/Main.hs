@@ -98,7 +98,7 @@ builder key device chan = do
               simpleNewPush
                 ToAll
                 NotePush
-                  { pushTitle = "Build completed"
+                  { pushTitle = pure "Build completed"
                   , pushBody = "Failed (" <> title <> ")\n" <> T.pack msg
                   }
         Right _ -> do
@@ -109,7 +109,7 @@ builder key device chan = do
               simpleNewPush
                 ToAll
                 NotePush
-                  { pushTitle = "Build completed"
+                  { pushTitle = pure "Build completed"
                   , pushBody = "Build successfully completed."
                   }
 
