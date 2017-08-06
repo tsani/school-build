@@ -35,11 +35,11 @@ main :: IO ()
 main = do
   cdHome
   putStrLn =<< getCurrentDirectory
-  (key, deviceId) <- loadPushbulletSettings
+  key <- loadPushbulletKey
   schoolKey <- loadSchoolApiKey
   repoKey <- loadRepoKey
   repoRoot <- Repo <$> loadRepoRoot
-  chan <- startBuilder key deviceId
+  chan <- startBuilder key
   webMain repoKey schoolKey $ RepoBuildAction (writeChan chan repoRoot)
 
 loadSchoolApiKey :: IO SchoolApiKey
@@ -54,17 +54,10 @@ loadRepoKey =
   RepoKey . encodeUtf8 <$> getEnvText "SCHOOL_BUILD_REPO_KEY"
   <|> die "no SCHOOL_BUILD_REPO_KEY"
 
-loadPushbulletSettings :: IO (PushbulletKey, DeviceId)
-loadPushbulletSettings = pure (,)
-  <*> (
-    PushbulletKey <$> (
-      getEnvText "PUSHBULLET_KEY" <|> die "no PUSHBULLET_KEY"
-    )
-  )
-  <*> (
-    DeviceId <$> (
-      getEnvText "PUSHBULLET_DEVICE" <|> die "no PUSHBULLET_DEVICE"
-    )
+loadPushbulletKey :: IO PushbulletKey
+loadPushbulletKey =
+  PushbulletKey <$> (
+    getEnvText "PUSHBULLET_KEY" <|> die "no PUSHBULLET_KEY"
   )
 
 -- | Prints a message and exits with a failure status.
@@ -77,14 +70,14 @@ getEnvText = fmap T.pack . getEnv
 getEnv' :: String -> IO (Maybe T.Text)
 getEnv' s = Just <$> getEnvText s <|> pure Nothing
 
-startBuilder :: PushbulletKey -> DeviceId -> IO (Chan Repo)
-startBuilder k d = do
+startBuilder :: PushbulletKey -> IO (Chan Repo)
+startBuilder k = do
   chan <- newChan
-  void . forkIO $ builder k d chan
+  void . forkIO $ builder k chan
   pure chan
 
-builder :: PushbulletKey -> DeviceId -> Chan Repo -> IO ()
-builder key device chan = do
+builder :: PushbulletKey -> Chan Repo -> IO ()
+builder key chan = do
   manager <- newManager tlsManagerSettings
   let auth = pushbulletAuth key
   let url = BaseUrl Https "api.pushbullet.com" 443 ""
