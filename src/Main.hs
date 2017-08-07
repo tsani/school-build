@@ -88,6 +88,7 @@ builder key chan = do
 
   forever $ do
     (Repo root) <- readChan chan
+    putStrLn $ "got request: " ++ root
     withCurrentDirectory root $ do
       (status, log) <- runUpdateRepo (updateRepo *> runMakefile)
       _ <- case status of
