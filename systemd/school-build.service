@@ -1,0 +1,10 @@
+[Unit]
+Description=A simple continuous integration server
+
+[Service]
+ExecStart=/home/tsani/.local/bin/school-build
+EnvironmentFile=/home/tsani/.school-build.env
+After=network.target
+
+[Install]
+WantedBy=multi-user.target
